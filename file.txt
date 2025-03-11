@@ -1,2 +1,4 @@
 Change from conflict-branch
 Conflicting change from main
+Temporary changes
+New feature added
