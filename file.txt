@@ -6,3 +6,4 @@ Temporary changes
 >>>>>>> feature-branch
 New feature added
 New feature added
+New feature added
