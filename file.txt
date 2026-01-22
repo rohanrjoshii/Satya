@@ -1,0 +1,11 @@
+<<<<<<< HEAD
+Change from conflict-branch
+Conflicting change from main
+Temporary changes
+=======
+>>>>>>> feature-branch
+New feature added
+New feature added
+New feature added
+Change from conflict-branch
+Conflicting change from main
