@@ -13,17 +13,18 @@
             }
         }
     ],
-    "routes": [
+    "rewrites": [
         {
-            "src": "/api/(.*)",
-            "dest": "api/index.py"
+            "source": "/api/(.*)",
+            "destination": "/api/index.py"
         },
         {
-            "handle": "filesystem"
+            "source": "/(.*)",
+            "destination": "/frontend/$1"
         },
         {
-            "src": "/(.*)",
-            "dest": "/index.html"
+            "source": "/(.*)",
+            "destination": "/frontend/index.html"
         }
     ]
 }
