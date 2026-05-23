@@ -1,13 +1,10 @@
 fastapi==0.109.0
 uvicorn==0.27.0
 python-multipart
-torch
-torchvision
-transformers
-timm
 opencv-python
 numpy
 pillow
-scikit-learn
-gradio
-sqlalchemy
+torch>=2.1.0
+torchvision>=0.17.0
+timm>=0.9.0
+onnxruntime>=1.16.0

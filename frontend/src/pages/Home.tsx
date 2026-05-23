@@ -21,7 +21,7 @@ const Home = () => {
     const navigate = useNavigate();
 
     return (
-        <div className="space-y-32 py-12">
+        <div className="space-y-24 py-12">
             {/* HERO SECTION */}
             <section className="text-center space-y-8 relative">
                 {/* Saffron Glow */}
@@ -67,6 +67,7 @@ const Home = () => {
                             How it Works
                         </Button>
                     </div>
+
                 </motion.div>
             </section>
 

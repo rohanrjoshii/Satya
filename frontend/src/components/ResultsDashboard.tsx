@@ -79,11 +79,183 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, onReset }) 
     const validScore = typeof result.score === 'number' && !isNaN(result.score);
     const percentage = validScore ? Math.round(result.score * 100) : 0;
     const isFake = result.score > 0.5;
+    const isTextResult = Boolean(result.analysis?.perplexity);
+    const textMetrics = result.analysis ?? {};
+
+    // Calculate confidence based on how many checks agreed (now 9 tests)
+    const calculateConfidence = () => {
+        if (!result.reality_check?.details) return 50;
+        
+        const details = result.reality_check.details;
+        const checks = [
+            details.fft?.anomaly,
+            details.noise?.suspicious,
+            details.color?.anomaly,
+            details.ela?.suspicious && !details.ela?.skipped,
+            details.jpeg?.suspicious && !details.jpeg?.skipped,
+            details.metadata?.ai_detected,
+            details.histogram?.anomaly,
+            details.edge?.anomaly,
+            details.blur?.anomaly
+        ].filter(check => check !== undefined);
+        
+        const anomalyCount = checks.filter(Boolean).length;
+        const totalChecks = checks.length;
+        
+        if (totalChecks === 0) return 50;
+        
+        // If most checks agree, confidence is high
+        const agreement = isFake 
+            ? (anomalyCount / totalChecks) 
+            : (1 - anomalyCount / totalChecks);
+        
+        return Math.round(agreement * 100);
+    };
+    
+    const confidence = calculateConfidence();
+
+    if (isTextResult) {
+        return (
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="grid grid-cols-1 gap-8 w-full max-w-6xl mx-auto relative"
+            >
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute -top-12 right-0 md:-right-12 h-10 w-10 rounded-full bg-background border shadow-sm hover:bg-destructive/10 hover:text-destructive z-50"
+                    onClick={onReset}
+                >
+                    <X size={20} />
+                </Button>
+
+                <div className="grid gap-8 lg:grid-cols-[1.3fr_0.9fr]">
+                    <Card className="border-2 border-border bg-card shadow-xl">
+                        <CardHeader>
+                            <CardTitle className="text-3xl font-bold">AI Content Detector</CardTitle>
+                            <CardDescription>
+                                Real-time text analysis with a score, category, and signal breakdown.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="rounded-3xl border border-input bg-background p-6">
+                                <div className="flex items-center justify-between gap-4">
+                                    <div>
+                                        <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Verdict</p>
+                                        <h2 className={cn("text-4xl font-extrabold", isFake ? 'text-destructive' : 'text-green-600')}>
+                                            {result.label}
+                                        </h2>
+                                    </div>
+                                    <div className={cn("rounded-3xl px-5 py-4 text-center shadow-sm", isFake ? 'bg-destructive/10 text-destructive' : 'bg-green-500/10 text-green-600')}>
+                                        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">AI Probability</p>
+                                        <p className="text-4xl font-bold mt-2">{percentage}%</p>
+                                    </div>
+                                </div>
+                                <div className="mt-6 space-y-3 text-sm text-muted-foreground">
+                                    <p>{result.details}</p>
+                                    <p className="text-xs text-muted-foreground/80">
+                                        Longer passages improve reliability. This detection uses statistical text features rather than a generative model fingerprint.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="rounded-3xl border border-input bg-background p-5">
+                                    <p className="text-sm font-semibold text-foreground">Word Count</p>
+                                    <p className="mt-2 text-3xl font-bold text-foreground">{result.analysis?.word_count ?? '—'}</p>
+                                </div>
+                                <div className="rounded-3xl border border-input bg-background p-5">
+                                    <p className="text-sm font-semibold text-foreground">Confidence</p>
+                                    <p className="mt-2 text-3xl font-bold text-foreground">{Math.round(Math.abs(result.score - 0.5) * 200)}%</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border border-border bg-card shadow-sm">
+                        <CardHeader>
+                            <CardTitle>Key Text Signals</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {[
+                                {
+                                    label: 'Entropy',
+                                    value: textMetrics.perplexity?.entropy?.toFixed(2) ?? 'n/a',
+                                    description: 'Lower entropy can signal overly predictable AI word choice.',
+                                },
+                                {
+                                    label: 'Burstiness',
+                                    value: textMetrics.burstiness?.burstiness?.toFixed(2) ?? 'n/a',
+                                    description: 'AI writing is often more uniform across vocabulary use.',
+                                },
+                                {
+                                    label: 'Sentence length entropy',
+                                    value: textMetrics.sentence_entropy?.entropy?.toFixed(2) ?? 'n/a',
+                                    description: 'Uniform sentence lengths are a common AI artifact.',
+                                },
+                                {
+                                    label: 'Lexical richness (TTR)',
+                                    value: textMetrics.lexical_richness?.ttr?.toFixed(2) ?? 'n/a',
+                                    description: 'High TTR can indicate unnaturally diverse word use.',
+                                },
+                                {
+                                    label: 'Punctuation variance',
+                                    value: textMetrics.punctuation?.variance?.toFixed(2) ?? 'n/a',
+                                    description: 'AI tends to reuse punctuation patterns consistently.',
+                                },
+                                {
+                                    label: 'Function word ratio',
+                                    value: textMetrics.function_word?.ratio?.toFixed(2) ?? 'n/a',
+                                    description: 'Unnatural function word usage is a strong text-level signal.',
+                                }
+                            ].map((item) => (
+                                <div key={item.label} className="rounded-3xl border border-border p-4 bg-background">
+                                    <div className="flex items-center justify-between gap-4">
+                                        <p className="text-sm font-semibold text-foreground">{item.label}</p>
+                                        <p className="text-lg font-semibold text-foreground">{item.value}</p>
+                                    </div>
+                                    <p className="mt-2 text-xs text-muted-foreground">{item.description}</p>
+                                </div>
+                            ))}
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <Card className="border border-border bg-card shadow-sm">
+                    <CardHeader>
+                        <CardTitle>Why this matters</CardTitle>
+                        <CardDescription>QuillBot-style text detection focuses on how the text is written, not just the content.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <p className="text-sm text-muted-foreground">
+                            This detector uses multiple statistical signals drawn from writing style, sentence structure, and word choice. It is best when the input contains a full paragraph rather than just a headline or fragment.
+                        </p>
+                        <div className="rounded-3xl border border-input bg-background p-5">
+                            <p className="text-sm font-semibold text-foreground">How results are scored</p>
+                            <ul className="mt-3 space-y-2 text-sm text-muted-foreground list-disc list-inside">
+                                <li>Entropy measures how predictable the text is.</li>
+                                <li>Burstiness checks if word usage is too uniform.</li>
+                                <li>Sentence length variation finds rigid structure.</li>
+                                <li>Lexical richness checks if the vocabulary is unnaturally broad.</li>
+                                <li>Function word ratio detects odd stylistic patterns.</li>
+                            </ul>
+                        </div>
+                    </CardContent>
+                </Card>
+            </motion.div>
+        );
+    }
 
     // Colors based on verdict
     const color = isFake ? 'text-destructive' : 'text-green-500';
     const bgColor = isFake ? 'bg-destructive/10' : 'bg-green-500/10';
     const borderColor = isFake ? 'border-destructive/20' : 'border-green-500/20';
+    
+    // Reality score color (green = real, red = fake)
+    const realityPercentage = (result.reality_check?.reality_score || 0.5) * 100;
+    const realityColor = realityPercentage > 50 ? 'bg-green-500' : 'bg-destructive';
 
     // Chart Data
     const doughnutData = {
@@ -99,16 +271,18 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, onReset }) 
     };
 
     const radarData = {
-        labels: ['Visual Artifacts', 'Semantic Consistency', 'Metadata Integrity', 'Frequency Analysis', 'Reality Score'],
+        labels: ['FFT', 'Noise', 'Color', 'ELA', 'Hist', 'Edge', 'Blur'],
         datasets: [
             {
                 label: 'Anomaly Score',
                 data: [
-                    Math.random() * 100, // Visual
-                    result.reality_check?.context?.impact ? result.reality_check.context.impact * 100 : 20, // Semantic
-                    result.reality_check?.metadata?.status === 'danger' ? 90 : 10, // Metadata
-                    percentage > 50 ? percentage + 10 : 20, // Frequency
-                    (1 - (result.reality_check?.reality_score || 0.5)) * 100 // Reality Anomaly
+                    result.reality_check?.details?.fft?.anomaly ? 80 : 20,
+                    result.reality_check?.details?.noise?.suspicious ? 80 : 20,
+                    result.reality_check?.details?.color?.anomaly ? 80 : 20,
+                    result.reality_check?.details?.ela?.suspicious && !result.reality_check?.details?.ela?.skipped ? 80 : 20,
+                    result.reality_check?.details?.histogram?.anomaly ? 80 : 20,
+                    result.reality_check?.details?.edge?.anomaly ? 80 : 20,
+                    result.reality_check?.details?.blur?.anomaly ? 80 : 20
                 ],
                 backgroundColor: isFake ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.2)',
                 borderColor: isFake ? '#ef4444' : '#22c55e',
@@ -145,7 +319,7 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, onReset }) 
                             {isFake ? "Likely AI-Generated" : "Likely Authentic"}
                         </CardTitle>
                         <CardDescription className="text-lg">
-                            We are <span className="font-semibold text-foreground">{percentage}% confident</span> in this result.
+                            We are <span className="font-semibold text-foreground">{confidence}% confident</span> in this result.
                         </CardDescription>
 
 
@@ -220,30 +394,79 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, onReset }) 
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Activity size={20} className="text-primary" />
-                            How we analyzed this
+                            Forensic Analysis Methods
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/50">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-background rounded-md shadow-sm text-primary"><Cpu size={16} /></div>
-                                <span className="font-medium text-sm">Deep Neural Network</span>
+                                <span className="font-medium text-sm">FFT Frequency</span>
                             </div>
-                            <CheckCircle size={16} className="text-green-500" />
+                            {result.reality_check?.details?.fft?.anomaly ? 
+                                <AlertTriangle size={16} className="text-destructive" /> : 
+                                <CheckCircle size={16} className="text-green-500" />
+                            }
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/50">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-background rounded-md shadow-sm text-primary"><Eye size={16} /></div>
-                                <span className="font-medium text-sm">Visual Artifact Scan</span>
+                                <span className="font-medium text-sm">Noise Pattern</span>
                             </div>
-                            <CheckCircle size={16} className="text-green-500" />
+                            {result.reality_check?.details?.noise?.suspicious ? 
+                                <AlertTriangle size={16} className="text-destructive" /> : 
+                                <CheckCircle size={16} className="text-green-500" />
+                            }
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/50">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-background rounded-md shadow-sm text-primary"><Activity size={16} /></div>
-                                <span className="font-medium text-sm">Frequency Analysis</span>
+                                <span className="font-medium text-sm">Color Correlation</span>
                             </div>
-                            <CheckCircle size={16} className="text-green-500" />
+                            {result.reality_check?.details?.color?.anomaly ? 
+                                <AlertTriangle size={16} className="text-destructive" /> : 
+                                <CheckCircle size={16} className="text-green-500" />
+                            }
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/50">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-background rounded-md shadow-sm text-primary"><ShieldCheck size={16} /></div>
+                                <span className="font-medium text-sm">ELA Analysis</span>
+                            </div>
+                            {result.reality_check?.details?.ela?.suspicious && !result.reality_check?.details?.ela?.skipped ? 
+                                <AlertTriangle size={16} className="text-destructive" /> : 
+                                <CheckCircle size={16} className="text-green-500" />
+                            }
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/50">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-background rounded-md shadow-sm text-primary"><Activity size={16} /></div>
+                                <span className="font-medium text-sm">Histogram</span>
+                            </div>
+                            {result.reality_check?.details?.histogram?.anomaly ? 
+                                <AlertTriangle size={16} className="text-destructive" /> : 
+                                <CheckCircle size={16} className="text-green-500" />
+                            }
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/50">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-background rounded-md shadow-sm text-primary"><Eye size={16} /></div>
+                                <span className="font-medium text-sm">Edge Coherence</span>
+                            </div>
+                            {result.reality_check?.details?.edge?.anomaly ? 
+                                <AlertTriangle size={16} className="text-destructive" /> : 
+                                <CheckCircle size={16} className="text-green-500" />
+                            }
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/50">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-background rounded-md shadow-sm text-primary"><Sparkles size={16} /></div>
+                                <span className="font-medium text-sm">Blur Consistency</span>
+                            </div>
+                            {result.reality_check?.details?.blur?.anomaly ? 
+                                <AlertTriangle size={16} className="text-destructive" /> : 
+                                <CheckCircle size={16} className="text-green-500" />
+                            }
                         </div>
                     </CardContent>
                 </Card>
@@ -277,18 +500,33 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, onReset }) 
                         <div className="mt-8 space-y-4">
                             <div className="space-y-2">
                                 <div className="flex justify-between text-sm font-medium">
-                                    <span>Reality Baseline</span>
-                                    <span>{result.reality_check?.reality_score ? Math.round(result.reality_check.reality_score * 100) : 50}%</span>
+                                    <span>Reality Score</span>
+                                    <span>{Math.round(realityPercentage)}%</span>
                                 </div>
-                                <Progress value={(result.reality_check?.reality_score || 0.5) * 100} className="h-2" />
+                                <Progress 
+                                    value={realityPercentage} 
+                                    className={cn("h-2", realityColor)}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    {realityPercentage > 70 ? "Strong indicators of authentic content" : 
+                                     realityPercentage > 50 ? "Mixed signals detected" : 
+                                     "Multiple anomalies detected"}
+                                </p>
                             </div>
-                            <div className="space-y-2">
-                                <div className="flex justify-between text-sm font-medium">
-                                    <span>Contextual Stability</span>
-                                    <span>{result.reality_check?.context?.status === 'success' ? 'Stable' : 'Unstable'}</span>
+                            
+                            {result.reality_check?.findings && result.reality_check.findings.length > 0 && (
+                                <div className="space-y-2 pt-4 border-t">
+                                    <h4 className="text-sm font-semibold">Forensic Findings:</h4>
+                                    <ul className="space-y-1">
+                                        {result.reality_check.findings.slice(0, 3).map((finding: string, idx: number) => (
+                                            <li key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
+                                                <span className="text-primary mt-0.5">•</span>
+                                                <span>{finding}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
                                 </div>
-                                <Progress value={result.reality_check?.context?.status === 'success' ? 90 : 30} className="h-2" />
-                            </div>
+                            )}
                         </div>
                     </CardContent>
                 </Card>

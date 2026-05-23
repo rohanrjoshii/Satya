@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, FileText, Image as ImageIcon, Video, X, CheckCircle, File as FileIcon } from 'lucide-react';
+import { Upload, FileText, Image as ImageIcon, Video, X, CheckCircle, File as FileIcon, Type } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -11,14 +11,25 @@ import { cn } from '@/lib/utils'; // Assuming you have this utility
 interface FileUploadProps {
     onFileSelect: (file: File) => void;
     onUrlSubmit: (url: string) => void;
+    onTextSubmit: (text: string) => void;
     isAnalyzing: boolean;
+    uploadProgress?: number | null;
+    analysisPhase?: string;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onUrlSubmit, isAnalyzing }) => {
+const FileUpload: React.FC<FileUploadProps> = ({
+    onFileSelect,
+    onUrlSubmit,
+    onTextSubmit,
+    isAnalyzing,
+    uploadProgress,
+    analysisPhase = 'Processing evidence'
+}) => {
     const [preview, setPreview] = useState<string | null>(null);
     const [fileName, setFileName] = useState<string | null>(null);
     const [fileSize, setFileSize] = useState<string | null>(null);
     const [urlInput, setUrlInput] = useState("");
+    const [textInput, setTextInput] = useState("");
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
         if (acceptedFiles.length > 0) {
@@ -58,6 +69,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onUrlSubmit, isAn
             'video/*': [],
             'text/plain': []
         },
+        maxSize: 100 * 1024 * 1024,
         maxFiles: 1
     });
 
@@ -65,6 +77,13 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onUrlSubmit, isAn
         e.preventDefault();
         if (urlInput.trim()) {
             onUrlSubmit(urlInput);
+        }
+    };
+
+    const handleTextSubmitInternal = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (textInput.trim()) {
+            onTextSubmit(textInput);
         }
     };
 
@@ -116,7 +135,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onUrlSubmit, isAn
                                 </div>
 
                                 <div className="absolute bottom-8 text-xs text-muted-foreground/60 uppercase tracking-widest font-semibold">
-                                    Max File Size: 100MB
+                                    Images, videos, or text files up to 100MB
                                 </div>
                             </div>
                         </div>
@@ -153,11 +172,18 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onUrlSubmit, isAn
                                     <div className="pt-2">
                                         {isAnalyzing ? (
                                             <div className="space-y-2">
-                                                <div className="flex justify-between text-xs font-semibold text-primary uppercase tracking-wider">
-                                                    <span>Analyzing Content</span>
-                                                    <span className="animate-pulse">Processing...</span>
+                                                <div className="flex justify-between gap-3 text-xs font-semibold text-primary uppercase tracking-wider">
+                                                    <span>{analysisPhase}</span>
+                                                    <span className="shrink-0 animate-pulse">
+                                                        {typeof uploadProgress === 'number' ? `${uploadProgress}%` : 'Processing...'}
+                                                    </span>
                                                 </div>
-                                                <Progress value={45} className="h-2 w-full" />
+                                                <Progress value={typeof uploadProgress === 'number' ? uploadProgress : 62} className="h-2 w-full" />
+                                                <p className="text-xs text-muted-foreground">
+                                                    {typeof uploadProgress === 'number' && uploadProgress < 100
+                                                        ? 'If this takes more than a few seconds, the backend is probably already processing.'
+                                                        : 'Running model inference and forensic checks.'}
+                                                </p>
                                             </div>
                                         ) : (
                                             <div className="flex items-center gap-2 text-green-600 font-medium bg-green-500/10 px-3 py-1.5 rounded-md w-fit text-sm">
@@ -201,6 +227,47 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onUrlSubmit, isAn
                         className="h-9 px-4 rounded-lg font-semibold"
                     >
                         Analyze
+                    </Button>
+                </div>
+            </form>
+            <p className="mt-3 text-xs text-muted-foreground">
+                Best accuracy comes from a direct image URL ending in .jpg, .png, .webp, or .jpeg. The backend must be running on port 8000 for URL-based analysis.
+            </p>
+
+            <div className="relative flex items-center">
+                <div className="flex-grow border-t border-border"></div>
+                <span className="flex-shrink-0 mx-4 text-muted-foreground text-sm font-medium uppercase tracking-wider">Or paste text</span>
+                <div className="flex-grow border-t border-border"></div>
+            </div>
+
+            <form onSubmit={handleTextSubmitInternal} className="space-y-3 rounded-xl border bg-card p-4 shadow-sm">
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <div className="rounded-md bg-muted p-1.5 text-muted-foreground">
+                        <Type size={16} />
+                    </div>
+                    Text authenticity check
+                </div>
+                <textarea
+                    disabled={isAnalyzing}
+                    value={textInput}
+                    onChange={(e) => setTextInput(e.target.value)}
+                    placeholder="Paste an article, caption, paragraph, or message to check for AI-writing signals."
+                    className="min-h-[140px] w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm leading-6 ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+                <p className="text-xs text-muted-foreground">
+                    Paste at least 20 characters for a reliable text authenticity signal.
+                </p>
+                <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-muted-foreground">
+                        {textInput.trim().length} characters
+                    </span>
+                    <Button
+                        type="submit"
+                        disabled={textInput.trim().length < 20 || isAnalyzing}
+                        size="sm"
+                        className="rounded-lg font-semibold"
+                    >
+                        Analyze Text
                     </Button>
                 </div>
             </form>
