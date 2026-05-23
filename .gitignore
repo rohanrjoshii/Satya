@@ -20,3 +20,8 @@ frontend/coverage/
 
 # Artifacts
 .gemini/
+node_modules/
+**/__pycache__/
+**/*.pyc
+backend/street.db
+backend/uploads/
